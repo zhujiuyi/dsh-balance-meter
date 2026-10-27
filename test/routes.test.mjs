@@ -113,6 +113,24 @@ describe('discoverRoutes', () => {
     assert.equal(routes[0].source, 'listProviders')
   })
 
+  it('re-matches the catalog once the profile config supplies a late baseURL', () => {
+    // A pi-ai provider reaches listProviders() without a baseURL, so the first
+    // buildRoute() has no host to match. The profile row that fills the baseURL
+    // in afterwards must re-run the match: otherwise a known vendor (Z.ai here)
+    // is reported as an uncatalogued relay for the rest of the process.
+    const llmRows = new Map([['zai-coding-cn', {
+      baseURL: 'https://open.bigmodel.cn/api/coding/paas/v4',
+      apiKeyEnv: 'ZAI_CODING_CN_API_KEY',
+    }]])
+    const routes = discoverRoutes({ providers: [{ id: 'zai-coding-cn' }], llmRows })
+    assert.equal(routes.length, 1)
+    assert.equal(routes[0].catalogued, true)
+    assert.equal(routes[0].entry.id, 'zhipu')
+    assert.equal(routes[0].label, '智谱 GLM / Z.AI')
+    assert.equal(routes[0].baseURL, 'https://open.bigmodel.cn/api/coding/paas/v4')
+    assert.equal(routes[0].apiKeyEnv, 'ZAI_CODING_CN_API_KEY')
+  })
+
   it('includes a configured route that listProviders did not report', () => {
     const llmRows = new Map([['opencode-go', { baseURL: 'https://opencode.ai', apiKeyEnv: 'OC_KEY' }]])
     const routes = discoverRoutes({ providers: [], llmRows })
