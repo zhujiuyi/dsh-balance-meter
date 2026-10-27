@@ -159,14 +159,14 @@ describe('zhipu', () => {
     assert.match(result.windows[0].note, /方向未标注/)
   })
 
-  it('falls back to the binding window when no span is recognisable', () => {
+  it('lists every measurable window when no span is recognisable', () => {
     const result = parseResponse('zhipu', {
       data: { limits: [{ used: 10, limit: 100, name: 'loose' }, { used: 90, limit: 100, name: 'tight' }] },
     })
-    assert.equal(result.display, 'tight 剩 10%')
+    assert.equal(result.display, 'loose 剩 90% · tight 剩 10%')
   })
 
-  it('prefers a 5-hour window over a weekly one when both are named', () => {
+  it('lists a 5-hour and a weekly window side by side', () => {
     const result = parseResponse('zhipu', {
       data: {
         limits: [
@@ -175,10 +175,10 @@ describe('zhipu', () => {
         ],
       },
     })
-    assert.equal(result.display, '5 小时窗口 剩 10%')
+    assert.equal(result.display, 'weekly 剩 90% · 5 小时窗口 剩 10%')
   })
 
-  it('prefers a weekly window over a monthly one', () => {
+  it('lists a weekly and a monthly window side by side', () => {
     const result = parseResponse('zhipu', {
       data: {
         limits: [
@@ -187,7 +187,39 @@ describe('zhipu', () => {
         ],
       },
     })
-    assert.equal(result.display, 'weekly 剩 50%')
+    assert.equal(result.display, 'monthly 剩 99% · weekly 剩 50%')
+  })
+
+  it('reads the live GLM Coding Plan shape by unit code', () => {
+    // Captured from a live GET /api/monitor/usage/quota/limit: `unit` names the
+    // span (3 = hours, 5 = months, 6 = weeks) and `percentage` is the used share.
+    // The monthly TIME_LIMIT entry is tool-call allowance, not a model window.
+    const result = parseResponse('zhipu', {
+      code: 200,
+      data: {
+        limits: [
+          { type: 'TOKENS_LIMIT', unit: 3, number: 5, percentage: 1, nextResetTime: 1793076170376 },
+          { type: 'TOKENS_LIMIT', unit: 6, number: 1, percentage: 4, nextResetTime: 1793576278984 },
+          {
+            type: 'TIME_LIMIT',
+            unit: 5,
+            number: 1,
+            usage: 4000,
+            currentValue: 27,
+            remaining: 3973,
+            percentage: 1,
+            nextResetTime: 1795102740998,
+          },
+        ],
+        level: 'max',
+      },
+      success: true,
+    })
+    assert.deepEqual(result.windows.map((w) => w.label), ['5 小时', '每周'])
+    assert.deepEqual(result.windows.map((w) => w.remainingPct), [99, 96])
+    assert.equal(result.windows[0].resetAt, '2026-10-27T04:42:50.376Z')
+    assert.equal(result.display, '5 小时 剩 99% · 每周 剩 96%')
+    assert.ok(result.detail.some((row) => row.label.includes('工具调用额度')))
   })
 
   it('refuses a body with no window-shaped object', () => {
@@ -260,10 +292,14 @@ describe('opencodeGo', () => {
     assert.equal(rolling.note, '原始 percent=0')
   })
 
-  it('shows the shortest-span window, not the one with least left', () => {
-    // rolling is the 5-hour cycle, so it is the window a subscriber manages
-    // against — even though monthly is the one with less remaining.
-    assert.equal(parseResponse('opencodeGo', LIVE).display, '5 小时 剩 100%')
+  it('lists every window in the readout, not just the shortest span', () => {
+    // The plan fails on whichever window is exhausted, so the one-line readout
+    // has to show all of them — the shortest span alone can look comfortable
+    // while a weekly or monthly window is already empty.
+    assert.equal(
+      parseResponse('opencodeGo', LIVE).display,
+      '5 小时 剩 100% · 每周 剩 92% · 每月 剩 47%',
+    )
   })
 
   it('falls back to the previous window when the shortest one has no figure', () => {
