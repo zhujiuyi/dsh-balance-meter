@@ -180,6 +180,12 @@ window.__ModuleLoader__.load({
 			'.dsh-balance-chip[data-busy="true"] .dsh-balance-dot{animation:dsh-balance-blink .4s steps(2,end) 3}',
 			'.dsh-balance-value{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
 			'.dsh-balance-value b{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:600;color:var(--dsw-alias-state-business-primary);font-size:11px}',
+			'.dsh-balance-wlabel{font-weight:600;letter-spacing:.02em}',
+			'.dsh-balance-wlabel[data-kind="time"]{color:#3fb950}',
+			'.dsh-balance-wlabel[data-kind="week"]{color:#58a6ff}',
+			'.dsh-balance-wlabel[data-empty="true"]{color:#f85149}',
+			'.dsh-balance-wpct{color:#f0f6fc}',
+			'.dsh-balance-sep{color:var(--dsw-alias-label-tertiary)}',
 			'.dsh-balance-value[data-ok="false"]{color:var(--dsw-alias-label-tertiary)}',
 			'.dsh-balance-chev{width:10px;height:10px;flex:none;color:var(--dsw-alias-label-tertiary);transition:transform .3s cubic-bezier(.16,1,.3,1)}',
 			'.dsh-balance-chip[aria-expanded="true"] .dsh-balance-chev{transform:rotate(180deg)}',
@@ -580,14 +586,47 @@ window.__ModuleLoader__.load({
 				&& Array.isArray(state.result.windows)
 				? state.result.windows
 				: []
-			// The window the header reports and the gauge draws: the shortest
-			// span that carries a real share, matching how the host picks `display`.
-			const focusWindow = windows.find((w) => typeof w.remainingPct === 'number') ?? null
+			// The binding window is the one with the least remaining, not merely the
+			// first one: a 5-hour window at 100% with a weekly window at 0% is
+			// unusable, so the gauge must reflect the weekly one.
+			const focusWindow = windows.reduce(
+				(least, w) => (typeof w.remainingPct === 'number' && (least === null || w.remainingPct < least.remainingPct) ? w : least),
+				null,
+			)
 			const heroPct = focusWindow !== null ? Math.round(focusWindow.remainingPct) : null
 			// A route whose reading is money (no windows) still has a figure, and
 			// the hero degrades to it rather than inventing a percentage.
 			const heroText = heroPct !== null ? String(heroPct) : (hasValue ? value : '—')
 			const heroIsPct = heroPct !== null
+
+			// Multi-window plans (5-hour + weekly) fail on whichever window runs out
+			// first, so the chip lists both shares; the label colour encodes the
+			// window kind, an exhausted window turns red, and the number stays white.
+			const shortWindowLabel = (label) => {
+				const value = String(label ?? '').replace(/^Design Plan ·\s*/u, '').trim()
+				const hours = value.match(/(\d+)\s*小时/u)
+				if (hours !== null) return `${hours[1]}小时`
+				if (/周|week/i.test(value)) return '周'
+				const days = value.match(/(\d+)\s*天/u)
+				if (days !== null) return days[1] === '7' ? '周' : `${days[1]}天`
+				return value
+			}
+			const windowKind = (label) => (/周|week|7\s*天/iu.test(String(label ?? '')) ? 'week' : 'time')
+			const chipWindows = windows.filter((w) => typeof w.remainingPct === 'number').slice(0, 2)
+			const chipParts = []
+			if (chipWindows.length >= 2) {
+				for (const [index, w] of chipWindows.entries()) {
+					if (index > 0) chipParts.push(h('span', { className: 'dsh-balance-sep', 'aria-hidden': 'true' }, ' · '))
+					const pct = Math.max(0, Math.round(w.remainingPct))
+					chipParts.push(h('span', {
+						className: 'dsh-balance-wlabel',
+						'data-kind': windowKind(w.label),
+						'data-empty': pct <= 0 ? 'true' : 'false',
+					}, shortWindowLabel(w.label)))
+					chipParts.push(h('span', { className: 'dsh-balance-wpct' }, ` ${pct}%`))
+				}
+			}
+			const chipContent = chipParts.length > 0 ? chipParts : text
 
 			const history = routeHistory(snapshot, route)
 
@@ -608,7 +647,7 @@ window.__ModuleLoader__.load({
 					h(
 						'span',
 						{ className: 'dsh-balance-value', 'data-ok': stale ? 'false' : hasValue ? 'true' : 'false' },
-						text,
+						chipContent,
 					),
 					h(
 						'svg',
