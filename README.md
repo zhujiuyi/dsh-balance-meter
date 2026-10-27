@@ -206,7 +206,7 @@ This is the DSH port of [ccgui-plugin-balance-meter](https://github.com/zhujiuyi
 | Networking | Host requires pre-declared domains, hence `exec:curl` | Plain `fetch` in-process |
 | Route detection | Sniffs gateway hostnames | `ctx.llm.listProviders()` + profile |
 
-Also: the readout sits on the composer stats row (`conversation.composer.dock`) rather than a status bar, and it reports the **shortest period first** (5-hour → weekly → monthly) — the window most likely to stop you first.
+Also: the readout sits on the composer stats row (`conversation.composer.dock`) rather than a status bar, and it lists **every readable window side by side** (5-hour · weekly · monthly) — a plan stops you on whichever window is exhausted first, not on the shortest one. On the chip the 5-hour label is green, the weekly label blue, a 0%-remaining label turns red, and the numbers stay white.
 
 Design spec: [docs/superpowers/specs/2026-10-14-dsh-balance-meter-design.md](docs/superpowers/specs/2026-10-14-dsh-balance-meter-design.md).
 

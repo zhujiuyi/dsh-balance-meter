@@ -154,7 +154,18 @@ export function discoverRoutes(input = {}) {
     existing.source = 'override'
   }
 
-  return [...routes.values()]
+  // Local fix (2026-10-27): re-resolve the catalog match after row enrichment
+  // and user overrides. buildRoute() ran before those fields were known, so a
+  // provider surfaced by listProviders() without a baseURL (e.g. pi-ai routes
+  // such as zai-coding-cn) kept `entry: undefined` forever and was reported as
+  // an unknown relay even after its gateway became known.
+  return [...routes.values()].map((route) => buildRoute({
+    id: route.id,
+    baseURL: route.baseURL,
+    apiKeyEnv: route.apiKeyEnv,
+    endpoint: route.endpoint,
+    source: route.source,
+  }))
 }
 
 /**

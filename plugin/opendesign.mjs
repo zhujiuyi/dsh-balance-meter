@@ -510,14 +510,14 @@ export async function runOpenDesignQuery(input) {
 function success(url, snapshot) {
   const windows = snapshot.windows
   const measured = windows.filter((window) => window.remainingPct !== null)
-  // The near-term window is the one a subscriber is managed against, so the
-  // chip reports the shortest span that carries a figure.
-  const focus = measured.length > 0 ? measured[0] : null
   const money = snapshot.amount === null ? null : formatMoney(snapshot.amount, 'USD')
-  // An absent balance is omitted rather than rendered as $0.00; the chip then
-  // falls back to the window share, and to a neutral label if that is absent too.
-  const display = focus !== null
-    ? `${focus.label.replace('Design Plan · ', '')} 剩 ${focus.remainingPct.toFixed(0)}%`
+  // A Design Plan fails on whichever window is exhausted, so the readout lists
+  // every measurable window (5-hour + 7-day) instead of only the nearest-term
+  // one. "剩" is spelled out because the bare percentage alone is ambiguous.
+  const display = measured.length > 0
+    ? measured
+        .map((window) => `${window.label.replace('Design Plan · ', '')} 剩 ${window.remainingPct.toFixed(0)}%`)
+        .join(' · ')
     : money ?? '已读取'
 
   const detail = [

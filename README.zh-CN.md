@@ -208,7 +208,7 @@ npm run check    # 只跑静态契约检查
 | 联网 | 宿主要求预声明域名，只能用 `exec:curl` | 进程内直接 `fetch` |
 | 识别路由 | 嗅探网关域名 | `ctx.llm.listProviders()` + profile |
 
-其他差异：界面在输入框下方状态行（`conversation.composer.dock`）而非状态栏；状态行显示的窗口**按跨度由短到长**取第一个有数字的（5 小时 → 每周 → 每月），因为那是最先会挡住你的那道闸。
+其他差异：界面在输入框下方状态行（`conversation.composer.dock`）而非状态栏；状态行把**每个能读出数字的窗口并列显示**（5 小时 · 每周 · 每月）——套餐是在任意一个窗口耗尽时停你，而不是只看跨度最短的那个。chip 上「5 小时」标签为绿色、「周」标签为蓝色、剩余 0% 的标签变红，数字保持白色。
 
 设计规格见 [docs/superpowers/specs/2026-10-14-dsh-balance-meter-design.md](docs/superpowers/specs/2026-10-14-dsh-balance-meter-design.md)。
 

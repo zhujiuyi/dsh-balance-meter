@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Z.ai / GLM quota windows are read correctly.** The live
+  `GET /api/monitor/usage/quota/limit` answers with `data.limits[]` entries that
+  name their span by a numeric unit code (3 = hours, 5 = months, 6 = weeks) and
+  report the *used* share. The parser treated the weekly window and the monthly
+  tool-call allowance as one unnamed "1-hour" window and could not show a number
+  for either. Both token windows are now labelled and stored as remaining
+  shares; the tool allowance is reported as a detail row.
+- **A known vendor is no longer reported as an uncatalogued relay when the
+  profile supplies its baseURL late.** pi-ai providers reach
+  `listProviders()` without a baseURL, so the catalog match now runs again after
+  the profile row fills it in. Z.ai routes were affected.
+
+### Changed
+
+- **The one-line readout lists every measurable window** instead of only the
+  shortest span: `5 小时 剩 99% · 每周 剩 96%`. A plan fails on whichever window
+  is exhausted, so hiding the weekly window could read as "available" while the
+  account was already blocked.
+- **The composer chip shows both windows**, with the 5-hour label in green, the
+  weekly label in blue, a 0%-remaining label in red, and the numbers white. The
+  ring gauge now tracks the window with the least remaining.
+
 ## 0.2.5
 
 This is the first release published to npm since **0.2.0**, so it carries the

@@ -216,6 +216,39 @@ function classesOf(tree) {
 }
 
 /**
+ * Collect every element node whose className contains `name`, invoking function
+ * components the way `classesOf` does.
+ * @param {unknown} tree
+ * @param {string} name
+ * @returns {{ type: string, props: Record<string, unknown>, children: unknown[] }[]}
+ */
+function nodesByClass(tree, name) {
+  const found = []
+  const seen = new Set()
+  const walk = (node) => {
+    if (node === null || node === undefined || typeof node !== 'object') return
+    if (seen.has(node)) return
+    seen.add(node)
+    if (Array.isArray(node)) {
+      for (const child of node) walk(child)
+      return
+    }
+    if (typeof node.type === 'function') {
+      walk(node.type(node.props))
+      return
+    }
+    if (typeof node.type === 'string' && node.props !== undefined
+      && typeof node.props.className === 'string'
+      && node.props.className.split(/\s+/).includes(name)) {
+      found.push(node)
+    }
+    for (const child of node.children ?? []) walk(child)
+  }
+  walk(tree)
+  return found
+}
+
+/**
  * Render the readout with a snapshot as a poll would leave it.
  *
  * The readout's `useState` calls happen in a fixed order — snapshot, error,
@@ -247,6 +280,29 @@ describe('browser half — render', () => {
     assert.ok(classes.has('dsh-balance-chip'))
     assert.ok(classes.has('dsh-balance-dot'))
     assert.ok(!classes.has('dsh-balance-pop'), 'the panel must stay closed')
+  })
+
+  it('shows both the 5-hour and weekly shares on the chip, coloured by window kind', () => {
+    // A plan fails on whichever window is exhausted, so a 100% 5-hour window
+    // next to an empty weekly one must not read as "everything is fine".
+    const snapshot = {
+      routes: [route()],
+      states: [quotaState([
+        { key: 'w5h', label: 'Design Plan · 5 小时', used: 0, limit: 100, remainingPct: 100 },
+        { key: 'w7d', label: 'Design Plan · 7 天', used: 100, limit: 100, remainingPct: 0 },
+      ])],
+      history: {},
+    }
+    const tree = render(snapshot)
+    const textOf = (node) => (node.children ?? []).flat(Infinity).join('')
+    const labels = nodesByClass(tree, 'dsh-balance-wlabel')
+    assert.deepEqual(labels.map(textOf), ['5小时', '周'])
+    assert.deepEqual(labels.map((node) => node.props['data-kind']), ['time', 'week'])
+    // The exhausted window is flagged so the stylesheet can paint its label red.
+    assert.equal(labels[1].props['data-empty'], 'true')
+    assert.equal(labels[0].props['data-empty'], 'false')
+    const numbers = nodesByClass(tree, 'dsh-balance-wpct').map(textOf)
+    assert.deepEqual(numbers, [' 100%', ' 0%'])
   })
 
   it('renders the panel shell when opened with no reading yet', () => {

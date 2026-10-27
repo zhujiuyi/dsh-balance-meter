@@ -185,22 +185,16 @@ function window_(input) {
 function quota(windows, detail = []) {
   if (windows.length === 0) throw new ParseError('响应里没有可识别的额度窗口')
   const measurable = windows.filter((w) => w.remainingPct !== null)
-  const ranked = measurable.filter((w) => spanRank(w) < 5)
-  // Shortest recognised span wins. With no recognised span at all there is no
-  // cycle to manage against, so the binding constraint — least remaining — is
-  // the more useful thing to surface than whichever window the API listed first.
-  const focus = ranked.length > 0
-    ? ranked.reduce((best, w) => (spanRank(w) < spanRank(best) ? w : best))
-    : (measurable.length > 0
-        ? measurable.reduce((least, w) => (w.remainingPct < least.remainingPct ? w : least))
-        : null)
-  // "剩" is spelled out because a bare "5 小时 100%" is ambiguous about which
-  // direction it measures — and so is any reading derived from a vendor's
-  // unlabelled percentage.
+  // A plan with two windows (5-hour + weekly) fails on whichever window runs out
+  // first, so the readout lists every measurable window instead of only the
+  // shortest span. "剩" is spelled out because a bare "5 小时 100%" is ambiguous
+  // about which direction it measures.
   const display =
-    focus === null
-      ? windows[0].label
-      : `${focus.label} 剩 ${focus.remainingPct.toFixed(0)}%`
+    measurable.length > 0
+      ? measurable
+          .map((w) => `${compactWindowLabel(w.label)} 剩 ${w.remainingPct.toFixed(0)}%`)
+          .join(' · ')
+      : windows[0].label
   return {
     kind: 'quota',
     currency: null,
@@ -328,29 +322,92 @@ const PARSERS = {
 
   /**
    * `GET /api/monitor/usage/quota/limit` — subscription windows.
-   * Shape is not published; scan for window-shaped objects and prefer explicit
-   * used/limit pairs.
+   *
+   * Shape verified live (2026-10-27):
+   *   data.limits[] = {
+   *     type: 'TOKENS_LIMIT' | 'TIME_LIMIT',
+   *     unit: 3 (小时) | 5 (月) | 6 (周), number, percentage,
+   *     nextResetTime (epoch ms), usage/currentValue/remaining (TIME_LIMIT only)
+   *   }
+   * `percentage` is the *used* share. A GLM/Z.ai Coding Plan fails on whichever
+   * window is exhausted, so both token windows are kept; the monthly tool-call
+   * allowance (search / web-reader / zread) is reported as extra detail, since
+   * it cannot block model traffic.
    */
   zhipu(body) {
-    const candidates = findObjects(body, (node) => {
-      const hasPair = num(node.used) !== null && num(node.limit) !== null
-      const hasPct = num(node.percentage) !== null || num(node.used_percent) !== null
-      return hasPair || hasPct
+    const listed = pick(body, 'data.limits')
+    // The live GLM Coding Plan shape names windows with a numeric unit code and
+    // a type. Other deployments return window-shaped objects without them, so
+    // only the unit/type shape gets the code mapping and the used→remaining
+    // inversion; anything else keeps the conservative "unlabelled percentage"
+    // treatment and the generic span labels.
+    const live = Array.isArray(listed) && listed.some((node) => {
+      if (node === null || typeof node !== 'object') return false
+      const type = String(node.type ?? '').toUpperCase()
+      return num(node.unit) !== null || type === 'TOKENS_LIMIT' || type === 'TIME_LIMIT'
     })
-    if (candidates.length === 0) throw new ParseError('响应里没有可识别的额度对象')
-    const windows = candidates.map((node, index) => {
-      const hours = num(node.number) ?? num(node.duration) ?? num(node.period)
-      const unit = firstString(node, ['unit', 'type', 'name'])
-      return window_({
+    if (!live) {
+      const candidates = Array.isArray(listed)
+        ? listed
+        : findObjects(body, (node) => {
+            const hasPair = num(node.used) !== null && num(node.limit) !== null
+            const hasPct = num(node.percentage) !== null || num(node.used_percent) !== null
+            return hasPair || hasPct
+          })
+      if (!Array.isArray(candidates) || candidates.length === 0) throw new ParseError('响应里没有可识别的额度对象')
+      const windows = candidates.map((node, index) => {
+        const hours = num(node.number) ?? num(node.duration) ?? num(node.period)
+        const unit = firstString(node, ['unit', 'type', 'name'])
+        return window_({
+          key: `w${index}`,
+          label: labelForWindow({ hours, unit, index }),
+          used: num(node.used) ?? num(node.used_tokens),
+          limit: num(node.limit) ?? num(node.total) ?? num(node.limit_tokens),
+          percentage: num(node.percentage) ?? num(node.used_percent),
+          resetAt: firstString(node, ['resetAt', 'reset_at', 'resetTime', 'nextResetTime']),
+        })
+      })
+      return quota(dedupeWindows(windows))
+    }
+    const windows = []
+    const detail = []
+    for (const [index, node] of listed.entries()) {
+      if (node === null || typeof node !== 'object') continue
+      const type = String(firstString(node, ['type']) ?? '').toUpperCase()
+      const percentage = num(node.percentage) ?? num(node.used_percent)
+      const resetAt = epochToIso(num(node.nextResetTime))
+        ?? firstString(node, ['resetAt', 'reset_at', 'resetTime'])
+        ?? undefined
+      if (type === 'TIME_LIMIT') {
+        const used = num(node.currentValue) ?? num(node.usage)
+        const limit = num(node.usage) ?? (num(node.remaining) !== null && used !== null ? used + num(node.remaining) : null)
+        const share = percentage !== null
+          ? percentage
+          : (limit !== null && used !== null && limit > 0 ? (used / limit) * 100 : null)
+        detail.push({
+          label: '工具调用额度（月）',
+          value: share === null ? '接口未给出可读数值' : `已用 ${share.toFixed(0)}%`,
+        })
+        continue
+      }
+      const window = window_({
         key: `w${index}`,
-        label: labelForWindow({ hours, unit, index }),
+        label: zhipuWindowLabel(num(node.unit), num(node.number)),
         used: num(node.used) ?? num(node.used_tokens),
         limit: num(node.limit) ?? num(node.total) ?? num(node.limit_tokens),
-        percentage: num(node.percentage) ?? num(node.used_percent),
-        resetAt: firstString(node, ['resetAt', 'reset_at', 'resetTime', 'nextResetTime']),
+        percentage,
+        resetAt,
       })
-    })
-    return quota(dedupeWindows(windows))
+      // The vendor reports the used share; invert it so every window is stored
+      // as "remaining", which is what the chip compares across windows.
+      if (window.remainingPct === null && percentage !== null) {
+        window.remainingPct = clampPct(100 - percentage)
+        window.note = `接口返回已用占比 ${percentage}%（方向按已用理解）`
+      }
+      windows.push(window)
+    }
+    if (windows.length === 0) throw new ParseError('响应里没有可识别的 token 额度窗口')
+    return quota(dedupeWindows(windows), detail)
   },
 
   /** `GET /coding/v1/usages` — subscription windows (5h / weekly). */
@@ -543,6 +600,43 @@ function labelForWindow({ hours, unit, index }) {
   if (hours !== null) return `${hours} 小时窗口`
   if (unit !== null && unit !== '') return unit
   return `窗口 ${index + 1}`
+}
+
+/**
+ * Compact a window label for the one-line readout.
+ * "Design Plan · 5 小时" → "5 小时"; other labels pass through unchanged.
+ * @param {string} label
+ * @returns {string}
+ */
+function compactWindowLabel(label) {
+  return String(label ?? '').replace(/^Design Plan ·\s*/u, '').trim()
+}
+
+/**
+ * Label one Zhipu `limits[]` entry. The live shape names codes, not spans
+ * (3 = 小时, 5 = 月, 6 = 周), so map the code rather than guessing hours.
+ * @param {number | null} unit
+ * @param {number | null} number
+ * @returns {string}
+ */
+function zhipuWindowLabel(unit, number) {
+  if (unit === 3) return number === null ? '小时窗口' : `${number} 小时`
+  if (unit === 4) return '每日'
+  if (unit === 5) return '每月'
+  if (unit === 6) return '每周'
+  return number === null ? '额度窗口' : `${number} 窗口`
+}
+
+/**
+ * Convert an epoch-millisecond reset field to an ISO string.
+ * @param {number | null} value
+ * @returns {string | null}
+ */
+function epochToIso(value) {
+  const ms = num(value)
+  if (ms === null || ms <= 0) return null
+  const date = new Date(ms)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 /**
