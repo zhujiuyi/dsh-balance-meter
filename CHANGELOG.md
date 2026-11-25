@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+First release to carry a merged community contribution
+([#1](https://github.com/zhujiuyi/dsh-balance-meter/pull/1)): it reads the live
+GLM / Z.ai Coding Plan windows by unit code instead of guessing the shape, and
+the readout now shows every window a plan can fail on rather than only the
+shortest span.
 
 ### Fixed
 
@@ -25,6 +31,13 @@
 - **The composer chip shows both windows**, with the 5-hour label in green, the
   weekly label in blue, a 0%-remaining label in red, and the numbers white. The
   ring gauge now tracks the window with the least remaining.
+
+### Tests
+
+308 tests, up from 305. The additions pin the live Zhipu shape (labels, remaining
+shares, reset time, tool detail), the late-baseURL catalog re-match, the
+multi-window readout, and the chip render for both labels, colours and the 0%
+flag. `npm run check` still passes.
 
 ## 0.2.5
 

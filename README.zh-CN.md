@@ -82,10 +82,10 @@ dsh plugin --profile desktop add @zhujiuyi/dsh-balance
 
 > **别装 `dsh-balance-meter`**（不带作用域）。那个名字在 npm 上属于别人。
 
-不想用 npm 的话，也可以直接装 Release 里的 tarball（路径里的 `/latest/` 会自动指向最新一版，不用手改版本号）：
+不想用 npm 的话，也可以直接装 Release 里的 tarball（路径里的 `/latest/` 会指向最新一版，但文件名带版本号，新版本发布后要把这段里的数字换掉）：
 
 ```sh
-dsh plugin --profile desktop add https://github.com/zhujiuyi/dsh-balance-meter/releases/latest/download/zhujiuyi-dsh-balance-0.2.5.tgz
+dsh plugin --profile desktop add https://github.com/zhujiuyi/dsh-balance-meter/releases/latest/download/zhujiuyi-dsh-balance-0.3.0.tgz
 ```
 
 从仓库直接装也可以：

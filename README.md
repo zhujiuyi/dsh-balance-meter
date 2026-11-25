@@ -82,10 +82,10 @@ Then **restart DSH**. The readout appears on the stats row under the composer.
 
 > Don't install `dsh-balance-meter` (no scope). That name belongs to an unrelated package on npm.
 
-Prefer not to use npm? Install the tarball from a release instead — `/latest/` follows the newest one, so this command needs no editing:
+Prefer not to use npm? Install the tarball from a release instead — `/latest/` resolves to the newest release, but the file name carries the version, so change the number once a newer one ships:
 
 ```sh
-dsh plugin --profile desktop add https://github.com/zhujiuyi/dsh-balance-meter/releases/latest/download/zhujiuyi-dsh-balance-0.2.5.tgz
+dsh plugin --profile desktop add https://github.com/zhujiuyi/dsh-balance-meter/releases/latest/download/zhujiuyi-dsh-balance-0.3.0.tgz
 ```
 
 Installing from the repository works too:
