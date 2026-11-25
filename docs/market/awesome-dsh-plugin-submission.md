@@ -14,6 +14,12 @@ entry, corrected two details in it, and committed it themselves. The live file i
 Both corrections are already reflected in the description below, so a later PR
 against the entry changes one file and nothing else.
 
+**Follow-up: PR #18893** →
+https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/18893
+(0.3.0, one file, description only) adds the multi-window readout to the
+description — the entry otherwise auto-derives `version` and `downloads` from npm,
+so a publish needs no entry change at all.
+
 Target path in the index repo: `data/plugins/zhujiuyi__dsh-balance-meter.yml`
 
 Open a PR against https://github.com/awesome-dsh-plugin/awesome-dsh-plugin
